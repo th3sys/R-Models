@@ -1,15 +1,16 @@
 library(tseries) 
 library(forecast) 
 library(dplyr)
-SP500 = read.csv("SP500.csv") 
-today = as.Date('2018-1-1')
-indexesdt = as.matrix(SP500[,c("Close")])
-returns = data.frame(DATE= as.Date(SP500[-1,]$Date),
-                     ABS_RTRN=diff(SP500$Close))
+ds = read.csv("VIX.csv") 
+today = as.Date("01-01-05",format="%d-%m-%y")
+
+indexesdt = as.matrix(ds[,c("Close")])
+returns = data.frame(DATE= as.Date(ds[-1,]$Date),
+                     ABS_RTRN=diff(ds$Close))
                      #PERCENT_RTRN=diff(indexesdt)/indexesdt[-nrow(indexesdt),])
 train = data.frame(returns) %>%
-  filter(DATE < today)  %>%
-  filter(DATE > '2016-1-1')
+  filter(DATE < today) %>%
+  filter(DATE > today - 355*2)
 test = data.frame(returns) %>%
   filter(DATE >= today) %>%
   top_n(n=-3,wt=DATE)
@@ -19,13 +20,10 @@ plot(train, type="l")
 acf(train$ABS_RTRN)
 # p-value smaller than 0.01
 adf.test(train$ABS_RTRN) 
-auto.arima(train$ABS_RTRN, max.P=0, max.Q=0, ic="aic")
-# ARIMA(1,1,0) with drift 
-auto.arima(train$ABS_RTRN, max.P=0, max.Q=0, ic="bic")
-# ARIMA(1,1,0) with drift 
 
 # FIT
-fit = arima(train$ABS_RTRN, order=c(1,1,0)) 
+
+fit = arima(train$ABS_RTRN, order=c(1,0,0)) 
 acf(residuals(fit)) 
 
 pnl <- function(x) {
@@ -49,3 +47,7 @@ lines(results$DATE,
 lines(results$DATE,
       forecasts$pred - forecasts$se, col="blue")
 
+auto.arima(train$ABS_RTRN, max.P=0, max.Q=0, ic="aic")
+# ARIMA(1,1,0) with drift 
+auto.arima(train$ABS_RTRN, max.P=0, max.Q=0, ic="bic") # take bic
+# ARIMA(1,1,0) with drift 

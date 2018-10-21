@@ -2,11 +2,11 @@ library(tseries)
 library(forecast) 
 library(dplyr)
 library(psych)
-ds = read.csv("SP500.csv") 
+ds = read.csv("VIX.csv") 
 step =  3
 stop = 20
-start <- as.Date("01-01-18",format="%d-%m-%y")
-end   <- as.Date("31-12-18",format="%d-%m-%y")
+start <- as.Date("01-01-05",format="%d-%m-%y")
+end   <- as.Date("31-12-05",format="%d-%m-%y")
 hedged_pnl <- function(x) { 
   if (as.numeric(x[2])>0) { # up
     if (as.numeric(x[3])>0){ # correct buy signal or stop loss
@@ -47,7 +47,7 @@ for(count in 1:nrow(benchmark)) {
     test = data.frame(returns) %>%
       filter(DATE >= benchmark[count,]$DATE) %>%
       top_n(n=-1*step,wt=DATE)
-    fit = arima(train$ABS_RTRN, order=c(1,1,0)) 
+    fit = arima(train$ABS_RTRN, order=c(4,0,3)) # take bic
     forecasts = predict(fit, step) 
     for(i in 1:step){
       if((count+i-1) <= nrow(benchmark))
