@@ -6,7 +6,7 @@ ds = read.csv("SP500.csv")
 step =  3
 stop = 20
 start <- as.Date("01-01-18",format="%d-%m-%y")
-end   <- as.Date("01-10-18",format="%d-%m-%y")
+end   <- as.Date("31-12-18",format="%d-%m-%y")
 hedged_pnl <- function(x) { 
   if (as.numeric(x[2])>0) { # up
     if (as.numeric(x[3])>0){ # correct buy signal or stop loss
@@ -58,14 +58,15 @@ for(count in 1:nrow(benchmark)) {
 benchmark$PNL <- apply(benchmark, 1, FUN = pnl)
 benchmark$H_PNL <- apply(benchmark, 1, FUN = hedged_pnl)
 
-sum(benchmark$PNL)
-sum(benchmark$H_PNL)
-sum(benchmark$ABS_RTRN)
 count(benchmark%>%filter(ABS_RTRN*PREDICTED > 0)) # winner over looser
+count(benchmark%>%filter(ABS_RTRN*PREDICTED <= 0)) # winner over looser
 sum(benchmark %>% filter(PNL != H_PNL) %>% select(PNL)) # where hedge helped
 sum(benchmark %>% filter(PNL != H_PNL) %>% select(H_PNL)) # where hedge helped
 
+hist(benchmark$PNL)
 plot(benchmark$DATE, benchmark$ABS_RTRN)
 lines(benchmark$DATE,benchmark$PREDICTED, col="red", type="p") 
-hist(benchmark$PNL)
 summary(benchmark$PNL)
+sum(benchmark$PNL)
+sum(benchmark$H_PNL)
+sum(benchmark$ABS_RTRN)
