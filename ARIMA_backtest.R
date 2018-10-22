@@ -4,9 +4,10 @@ library(dplyr)
 library(psych)
 ds = read.csv("VIX.csv") 
 step =  3
-stop = 20
-start <- as.Date("01-01-05",format="%d-%m-%y")
-end   <- as.Date("31-12-05",format="%d-%m-%y")
+stop = 7
+model = c(1,0,1)
+start <- as.Date("01-01-18",format="%d-%m-%y")
+end   <- as.Date("31-12-18",format="%d-%m-%y")
 hedged_pnl <- function(x) { 
   if (as.numeric(x[2])>0) { # up
     if (as.numeric(x[3])>0){ # correct buy signal or stop loss
@@ -40,14 +41,13 @@ benchmark <- data.frame(returns) %>%
 
 for(count in 1:nrow(benchmark)) {
   if (count == 1 || count %% step == 1) {
-    print(count)
     train = data.frame(returns) %>%
-      filter(DATE < benchmark[count,]$DATE)  %>%
-      filter(DATE > benchmark[count,]$DATE - 355*2) # 2 years is enough
+      filter(DATE < benchmark[count,]$DATE)  # %>%
+      #  filter(DATE > benchmark[count,]$DATE - 355*2) # 2 years is enough
     test = data.frame(returns) %>%
       filter(DATE >= benchmark[count,]$DATE) %>%
       top_n(n=-1*step,wt=DATE)
-    fit = arima(train$ABS_RTRN, order=c(4,0,3)) # take bic
+    fit = arima(train$ABS_RTRN, order=model) # take bic
     forecasts = predict(fit, step) 
     for(i in 1:step){
       if((count+i-1) <= nrow(benchmark))
@@ -58,8 +58,6 @@ for(count in 1:nrow(benchmark)) {
 benchmark$PNL <- apply(benchmark, 1, FUN = pnl)
 benchmark$H_PNL <- apply(benchmark, 1, FUN = hedged_pnl)
 
-count(benchmark%>%filter(ABS_RTRN*PREDICTED > 0)) # winner over looser
-count(benchmark%>%filter(ABS_RTRN*PREDICTED <= 0)) # winner over looser
 sum(benchmark %>% filter(PNL != H_PNL) %>% select(PNL)) # where hedge helped
 sum(benchmark %>% filter(PNL != H_PNL) %>% select(H_PNL)) # where hedge helped
 
@@ -70,3 +68,8 @@ summary(benchmark$PNL)
 sum(benchmark$PNL)
 sum(benchmark$H_PNL)
 sum(benchmark$ABS_RTRN)
+w<-count(benchmark%>%filter(ABS_RTRN*PREDICTED > 0)) # winner over looser
+l<-count(benchmark%>%filter(ABS_RTRN*PREDICTED <= 0)) # winner over looser
+r<-c(w,l,w/(l+w))
+r
+# ARIMA(1,0,1) can predict VIX movements and 52%-57% times right

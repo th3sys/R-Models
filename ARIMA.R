@@ -2,7 +2,7 @@ library(tseries)
 library(forecast) 
 library(dplyr)
 ds = read.csv("VIX.csv") 
-today = as.Date("01-01-05",format="%d-%m-%y")
+today = as.Date("01-01-18",format="%d-%m-%y")
 
 indexesdt = as.matrix(ds[,c("Close")])
 returns = data.frame(DATE= as.Date(ds[-1,]$Date),
