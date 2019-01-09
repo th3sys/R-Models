@@ -24,7 +24,7 @@ adf.test(train$ABS_RTRN)
 # FIT
 arma.garch.norm = ugarchspec(mean.model=list(armaOrder=c(1,1,1)), 
                              variance.model=list(garchOrder=c(1,1))) 
-fit.arma.garch.norm = ugarchfit(train$ABS_RTRN, spec=arma.garch.norm, out.sample=days) 
+fit.arma.garch.norm = ugarchfit(train$ABS_RTRN, spec=arma.garch.norm, out.sample=9) 
 show(fit.arma.garch.norm)
 #acf(residuals(fit.arma.garch.norm)) 
 
@@ -36,6 +36,7 @@ pnl <- function(x) {
 }
 # PREDICT
 forecasts = ugarchforecast(fit.arma.garch.norm, n.ahead=days/10, n.roll=9)
+plot(forecasts,which="all")
 results = data.frame(DATE= as.Date(test$DATE),
               REAL_RTRN = test$ABS_RTRN, 
               PREDICTED=as.vector(forecasts@forecast$seriesFor))
