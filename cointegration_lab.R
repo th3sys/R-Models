@@ -29,7 +29,7 @@ summary(ca.jo(CokePepsi))
 Stock_FX_Bond = read.csv("Stock_FX_Bond.csv", header=T) 
 adjClose = Stock_FX_Bond[,seq(from=3, to=21, by=2)] 
 ts.plot(adjClose) 
-summary(ca.jo(adjClose))
+summary(ca.jo(adjClose[,c("GM_AC","F_AC")] ))
 ts.plot(adjClose[,c("GM_AC","F_AC")] )
 summary(ca.jo(adjClose, K=8))
 ts.plot(adjClose[,"GM_AC"] - 0.350*adjClose[,"F_AC"] )
