@@ -5,11 +5,21 @@ library(xts)
 library(dplyr)
 library(vars)
 library(PerformanceAnalytics)
+getPrices = function(theObject) {
+  prices <- data.frame(theObject[[1]])
+  # colnames(prices) <- colnames(toTest[[1]])
+  for(i in 2:length(theObject)) {
+    nxt <- data.frame(theObject[[i]])
+    # colnames(nxt) <- colnames(toTest[[i]])
+    prices <- cbind(prices,nxt)
+  }
+  return (prices)
+}
 # 1. load
 data = "fx"
 sep = "/"
-from = "2008-01"
-to = "2014-06"
+from = "2008-04-17"
+to = "2014-06-01"
 max_port = 4
 portfolio <- list()
 for (ccy in  list.files("fx")) {
@@ -40,17 +50,10 @@ for(i in seq(2,max_port)) {
       # Add the currency pairs that correspond to this particular combination to the list
       toTest[[z]] = portfolio[[combinations[j,z]]]
     }
-    prices <- data.frame(toTest[[1]])
-    # colnames(prices) <- colnames(toTest[[1]])
-    for(i in 2:length(toTest)) {
-      nxt <- data.frame(toTest[[i]])
-      # colnames(nxt) <- colnames(toTest[[i]])
-      prices <- cbind(prices,nxt)
-    }
+    prices <- getPrices(toTest)
     selected = list()
     for(x in colnames(prices)){
       if(!grepl("_Volume",x)) {
-        print(x)
         selected[[x]] <- x
       }
     }
@@ -78,7 +81,7 @@ for(i in 1:length(tests))
   # If the trace statistic for r ≤ 0 is rejected with at least 90% confidence
   # chi^2. If testStatic for r<= 0 is greater than the corresponding criticalValue, then r<=0 is rejected and we have at least one cointegrating vector
   if(testStatistics[length(testStatistics)] >= criticalValues[dim(criticalValues)[1],1]) {
-    cointegratedPortfolio[length(cointegratedPortfolio)+1] <- tests[[i]]
+    cointegratedPortfolio[[length(cointegratedPortfolio)+1]] <- tests[[i]]
     colnames(tests[[i]]$portfolio)[1]
     selected <- list()
     for (x in 1:length(tests[[i]]$portfolio)) {
@@ -88,8 +91,24 @@ for(i in 1:length(tests))
   }
 }
 print(paste(length(cointegratedPortfolio), " Portfolio's are cointegrated", sep=""))
-
-
+# 4. plot
+for(p in cointegratedPortfolio) {
+  pos_lambda <- which.max(p$trace@lambda)
+  p_length <- length(p$portfolio)
+  getOptimalEigenvector <-p$trace@V[1:p_length,pos_lambda]
+  prices <- getPrices(p$portfolio)
+  selected = list()
+  for(x in colnames(prices)){
+    if(!grepl("_Volume",x)) {
+      selected[[x]] <- x
+    }
+  }
+  prices <- dplyr::select(prices, as.character(selected))
+  portfolioSpread <- rowSums(t(getOptimalEigenvector*t(prices)))
+  plot(portfolioSpread)
+  acf(portfolioSpread)
+  adf.test(portfolioSpread)
+}
 
 
 
