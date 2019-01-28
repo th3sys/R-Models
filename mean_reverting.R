@@ -5,6 +5,13 @@ library(xts)
 library(dplyr)
 library(vars)
 library(PerformanceAnalytics)
+# Note: Function was found online and it was copied here
+vect_lag <- function(v, n=1, forward=FALSE) {
+  if (forward)
+    c(v[(n+1):length(v)], rep(NA, n))
+  else
+    c(rep(NA, n), v[1:(length(v) - n)])
+}
 getPrices = function(theObject) {
   prices <- data.frame(theObject[[1]])
   # colnames(prices) <- colnames(toTest[[1]])
@@ -92,11 +99,13 @@ for(i in 1:length(tests))
 }
 print(paste(length(cointegratedPortfolio), " Portfolio's are cointegrated", sep=""))
 # 4. plot
+do.call(file.remove, list(list.files("analyse/", full.names = TRUE)))
 for(p in cointegratedPortfolio) {
   pos_lambda <- which.max(p$trace@lambda)
   p_length <- length(p$portfolio)
   getOptimalEigenvector <-p$trace@V[1:p_length,pos_lambda]
   prices <- getPrices(p$portfolio)
+  timeStamps <- time(p$portfolio[[1]])
   selected = list()
   for(x in colnames(prices)){
     if(!grepl("_Volume",x)) {
@@ -108,8 +117,43 @@ for(p in cointegratedPortfolio) {
   plot(portfolioSpread)
   acf(portfolioSpread)
   adf.test(portfolioSpread)
+  # This function calculates the halflife of mean reversion and returns the result
+  # dy(t) = (lambda*y(t-1) + mu)dt + dE
+  # Halflife = -log(2)/lambda
+  # Note: the function assumes that the johansen procedure was executed on the Portfolio
+  laggedPortfolioSpread = vect_lag(portfolioSpread,1)
+  deltaSpread = portfolioSpread-laggedPortfolioSpread
+  laggedPortfolioSpread <- laggedPortfolioSpread[!is.na(laggedPortfolioSpread)]
+  deltaSpread <- deltaSpread[!is.na(deltaSpread)]
+  
+  fit <- lm(deltaSpread ~ laggedPortfolioSpread)
+  halfLife <- -log(2)/fit$coefficients[2]
+  halfLifeString <- paste(" (HalfLife is ",ceiling(halfLife),' days)',sep="")
+  currencyString <- colnames(prices)[1]
+  spreadString <- paste(getOptimalEigenvector[1], "*", colnames(prices)[1],sep="")
+  for(j in 2:p_length)
+  {    
+    currencyString <- paste(currencyString,colnames(prices)[j],sep="_")
+    sign = "-"
+    if(getOptimalEigenvector[j] > 0)
+      sign = "+"
+    spreadString <- paste(spreadString,sign,round(abs(getOptimalEigenvector[j]),2),"*",
+                          colnames(prices)[j],sep="")
+  }
+  filename <- paste0("analyse/", currencyString,".html")
+  sink(filename, append=TRUE, split=TRUE)
+  summary(p$trace)
+  tmp  <- readLines(filename)
+  writeLines(c("<pre>",tmp,"</pre>"), con=filename)
+  
+  #jpeg(paste0("analyse/", currencyString,".jpg"))
+  s <- portfolioSpread
+  plot(timeStamps,s,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
+  abline(h=c(mean(s),mean(s)+sd(s),a=mean(s)+2*sd(s),
+             mean(s)-sd(s),mean(s)-2*sd(s)),col=c("green","blue","red","blue","red"))
+  #dev.off( )
 }
-
+#
 
 
 
