@@ -114,9 +114,6 @@ for(p in cointegratedPortfolio) {
   }
   prices <- dplyr::select(prices, as.character(selected))
   portfolioSpread <- rowSums(t(getOptimalEigenvector*t(prices)))
-  plot(portfolioSpread)
-  acf(portfolioSpread)
-  adf.test(portfolioSpread)
   # This function calculates the halflife of mean reversion and returns the result
   # dy(t) = (lambda*y(t-1) + mu)dt + dE
   # Halflife = -log(2)/lambda
@@ -140,18 +137,31 @@ for(p in cointegratedPortfolio) {
     spreadString <- paste(spreadString,sign,round(abs(getOptimalEigenvector[j]),2),"*",
                           colnames(prices)[j],sep="")
   }
+  filename_tmp <- paste0("analyse/", currencyString,"_tmp.html")
   filename <- paste0("analyse/", currencyString,".html")
-  sink(filename, append=TRUE, split=TRUE)
+  autoCovar <- paste0(currencyString,"_acf.jpg")
+  resSpread <- paste0(currencyString,"_test.jpg")
+  sink(filename_tmp, append=TRUE, split=TRUE)
   summary(p$trace)
-  tmp  <- readLines(filename)
-  writeLines(c("<pre>",tmp,"</pre>"), con=filename)
+  johansen  <- readLines(filename_tmp)
+  file.remove(filename_tmp)
+  sink(filename_tmp, append=TRUE, split=TRUE)
+  adf.test(portfolioSpread)
+  dickey_fuller  <- readLines(filename_tmp)
+  file.remove(filename_tmp)
+  writeLines(c("<pre>",johansen,"</pre><pre>",dickey_fuller,"</pre>",
+    "<img src='",autoCovar,"'/>","<img src='",resSpread,"'/>"), con=filename)
   
-  #jpeg(paste0("analyse/", currencyString,".jpg"))
+  jpeg(paste0("analyse/", autoCovar))
+  acf(portfolioSpread)
+  dev.off( )
+  jpeg(paste0("analyse/", resSpread))
   s <- portfolioSpread
   plot(timeStamps,s,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
   abline(h=c(mean(s),mean(s)+sd(s),a=mean(s)+2*sd(s),
              mean(s)-sd(s),mean(s)-2*sd(s)),col=c("green","blue","red","blue","red"))
-  #dev.off( )
+  dev.off( )
+  sink() #end diversion of output
 }
 #
 
