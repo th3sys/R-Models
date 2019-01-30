@@ -100,6 +100,7 @@ for(i in 1:length(tests))
 print(paste(length(cointegratedPortfolio), " Portfolio's are cointegrated", sep=""))
 # 4. plot
 do.call(file.remove, list(list.files("analyse/", full.names = TRUE)))
+dir.create("analyse/img")
 for(p in cointegratedPortfolio) {
   pos_lambda <- which.max(p$trace@lambda)
   p_length <- length(p$portfolio)
