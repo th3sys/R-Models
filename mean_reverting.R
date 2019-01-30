@@ -25,8 +25,8 @@ getPrices = function(theObject) {
 # 1. load
 data = "fx"
 sep = "/"
-from = "2008-04-17"
-to = "2014-06-01"
+from = "2008-01"
+to = "2014-06"
 max_port = 4
 portfolio <- list()
 for (ccy in  list.files("fx")) {
@@ -137,31 +137,29 @@ for(p in cointegratedPortfolio) {
     spreadString <- paste(spreadString,sign,round(abs(getOptimalEigenvector[j]),2),"*",
                           colnames(prices)[j],sep="")
   }
-  filename_tmp <- paste0("analyse/", currencyString,"_tmp.html")
   filename <- paste0("analyse/", currencyString,".html")
   autoCovar <- paste0(currencyString,"_acf.jpg")
   resSpread <- paste0(currencyString,"_test.jpg")
-  sink(filename_tmp, append=TRUE, split=TRUE)
-  summary(p$trace)
-  johansen  <- readLines(filename_tmp)
-  file.remove(filename_tmp)
-  sink(filename_tmp, append=TRUE, split=TRUE)
-  adf.test(portfolioSpread)
-  dickey_fuller  <- readLines(filename_tmp)
-  file.remove(filename_tmp)
-  writeLines(c("<pre>",johansen,"</pre><pre>",dickey_fuller,"</pre>",
-    "<img src='",autoCovar,"'/>","<img src='",resSpread,"'/>"), con=filename)
-  
-  jpeg(paste0("analyse/", autoCovar))
+  johansen <- summary(p$trace)
+  dickey_fuller <- adf.test(portfolioSpread)
+  write("<pre>", filename, append = TRUE)
+  write(johansen@test.name, filename, append = TRUE)
+  write.table(cbind(round(johansen@teststat,2), johansen@cval), filename, append = TRUE)
+  write.table(round(johansen@V,2), filename, append = TRUE)
+  write("</pre><pre>", filename, append = TRUE)
+  write(c(dickey_fuller$method,"p-value", dickey_fuller$p.value), filename, append = TRUE)
+  write("</pre>", filename, append = TRUE)
+  write(paste0("<img src='img/",autoCovar,"'/>"), filename, append = TRUE)
+  write(paste0("<img src='img/",resSpread,"'/>"), filename, append = TRUE)
+  jpeg(paste0("analyse/img/", autoCovar))
   acf(portfolioSpread)
   dev.off( )
-  jpeg(paste0("analyse/", resSpread))
+  jpeg(paste0("analyse/img/", resSpread))
   s <- portfolioSpread
   plot(timeStamps,s,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
   abline(h=c(mean(s),mean(s)+sd(s),a=mean(s)+2*sd(s),
              mean(s)-sd(s),mean(s)-2*sd(s)),col=c("green","blue","red","blue","red"))
   dev.off( )
-  sink() #end diversion of output
 }
 #
 
