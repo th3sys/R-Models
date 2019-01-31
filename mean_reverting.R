@@ -100,7 +100,11 @@ for(i in 1:length(tests))
 print(paste(length(cointegratedPortfolio), " Portfolio's are cointegrated", sep=""))
 # 4. plot
 do.call(file.remove, list(list.files("analyse/", full.names = TRUE)))
-dir.create("analyse/img")
+if (isTRUE(dir.exists("analyse/img"))) {
+  do.call(file.remove, list(list.files("analyse/img", full.names = TRUE)))
+} else {
+  dir.create("analyse/img")
+}
 for(p in cointegratedPortfolio) {
   pos_lambda <- which.max(p$trace@lambda)
   p_length <- length(p$portfolio)
@@ -141,6 +145,7 @@ for(p in cointegratedPortfolio) {
   filename <- paste0("analyse/", currencyString,".html")
   autoCovar <- paste0(currencyString,"_acf.jpg")
   resSpread <- paste0(currencyString,"_test.jpg")
+  resMult <- paste0(currencyString,"_mult.jpg")
   johansen <- summary(p$trace)
   dickey_fuller <- adf.test(portfolioSpread)
   write("<pre>", filename, append = TRUE)
@@ -152,6 +157,7 @@ for(p in cointegratedPortfolio) {
   write("</pre>", filename, append = TRUE)
   write(paste0("<img src='img/",autoCovar,"'/>"), filename, append = TRUE)
   write(paste0("<img src='img/",resSpread,"'/>"), filename, append = TRUE)
+  write(paste0("<img src='img/",resMult,"'/>"), filename, append = TRUE)
   jpeg(paste0("analyse/img/", autoCovar))
   acf(portfolioSpread)
   dev.off( )
@@ -160,6 +166,14 @@ for(p in cointegratedPortfolio) {
   plot(timeStamps,s,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
   abline(h=c(mean(s),mean(s)+sd(s),a=mean(s)+2*sd(s),
              mean(s)-sd(s),mean(s)-2*sd(s)),col=c("green","blue","red","blue","red"))
+  dev.off( )
+  jpeg(paste0("analyse/img/", resMult))
+  plot(timeStamps, prices[,1], ylim=c(0.5,1.5)*range(prices), main="",type="l",ylab="",xlab="")
+  for(i in 2:length(prices)) {
+    lines(timeStamps, prices[,i], col=i)
+  }
+  legend("topleft", legend = colnames(prices), 
+         text.col=c(1:length(prices)), ncol=length(prices) )
   dev.off( )
 }
 #
