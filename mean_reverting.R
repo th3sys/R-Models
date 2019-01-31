@@ -148,6 +148,9 @@ for(p in cointegratedPortfolio) {
   resMult <- paste0(currencyString,"_mult.jpg")
   johansen <- summary(p$trace)
   dickey_fuller <- adf.test(portfolioSpread)
+  if (dickey_fuller$p.value > 0.02) {
+    next()
+  }
   write("<pre>", filename, append = TRUE)
   write(johansen@test.name, filename, append = TRUE)
   write.table(cbind(round(johansen@teststat,2), johansen@cval), filename, append = TRUE)
