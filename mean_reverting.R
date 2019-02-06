@@ -5,6 +5,31 @@ library(xts)
 library(dplyr)
 library(vars)
 library(PerformanceAnalytics)
+# Lag function for matrices
+# Note: Function was foudn online and it was copied here
+lag.matrix <- function(x, k=1){
+  N <- ncol(x)
+  l <- matrix(embed(x,k+1)[, -c(1:(k*N))], ncol=N)
+  NAs <- matrix(rep(NA, k*N), ncol=N)
+  rbind(NAs, l)
+}
+# R equivalent of matlab repmat
+# Note: Function was found online and was copied here
+repmat = function(X,m,n){
+  ##R equivalent of repmat (matlab)
+  mx = dim(X)[1]
+  nx = dim(X)[2]
+  matrix(t(matrix(X,mx,nx*n)),mx*m,nx*n,byrow=T)
+}
+# Repeats the last non NA value. Keep leading NA
+# Note: Function was found online and it was copied here
+fillMissingValues = function(x) {   # repeats the last non NA value. Keeps leading NA
+  ind = which(!is.na(x))      # get positions of nonmissing values
+  if(is.na(x[1]))             # if it begins with a missing, add the 
+    ind = c(1,ind)        # first position to the indices
+  rep(x[ind], times = diff(   # repeat the values at these indices
+    c(ind, length(x) + 1) )) # diffing the indices + length yields how often 
+} 
 # Note: Function was found online and it was copied here
 vect_lag <- function(v, n=1, forward=FALSE) {
   if (forward)
@@ -28,6 +53,8 @@ sep = "/"
 from = "2008-01"
 to = "2014-06"
 max_port = 4
+c_entryZscore = 1 # Entry deviation
+c_exitZscore = 0 # Exit deviation
 portfolio <- list()
 for (ccy in  list.files("fx")) {
   print (paste("loading ", ccy))
@@ -146,6 +173,8 @@ for(p in cointegratedPortfolio) {
   autoCovar <- paste0(currencyString,"_acf.jpg")
   resSpread <- paste0(currencyString,"_test.jpg")
   resMult <- paste0(currencyString,"_mult.jpg")
+  resHist <- paste0(currencyString,"_hist.jpg")
+  resEq <- paste0(currencyString,"_eq.jpg")
   johansen <- summary(p$trace)
   dickey_fuller <- adf.test(portfolioSpread)
   if (dickey_fuller$p.value > 0.02) {
@@ -161,6 +190,8 @@ for(p in cointegratedPortfolio) {
   write(paste0("<img src='img/",autoCovar,"'/>"), filename, append = TRUE)
   write(paste0("<img src='img/",resSpread,"'/>"), filename, append = TRUE)
   write(paste0("<img src='img/",resMult,"'/>"), filename, append = TRUE)
+  write(paste0("<img src='img/",resHist,"'/>"), filename, append = TRUE)
+  write(paste0("<img src='img/",resEq,"'/>"), filename, append = TRUE)
   jpeg(paste0("analyse/img/", autoCovar))
   acf(portfolioSpread)
   dev.off( )
@@ -178,8 +209,79 @@ for(p in cointegratedPortfolio) {
   legend("topleft", legend = colnames(prices), 
          text.col=c(1:length(prices)), ncol=length(prices) )
   dev.off( )
+  
+  # 5 execute strategy
+  meanSpread <- mean(portfolioSpread)
+  stdSpread <- sd(portfolioSpread)
+  zScore = (portfolioSpread - meanSpread)/stdSpread
+  longsEntry <- (zScore < -c_entryZscore)
+  longsExit <- (zScore > -c_exitZscore)
+  shortsEntry <- (zScore > c_entryZscore)
+  shortsExit <- (zScore < c_exitZscore)
+  
+  nrDataPoints <- length(portfolioSpread)
+  # Create vector with 0 values
+  numUnitsLong <- vector(mode="numeric",length=nrDataPoints)
+  # Set NA from 2:end
+  numUnitsLong[2:nrDataPoints] <- NA
+  numUnitsShort <- numUnitsLong # Copy by value
+  
+  # numUnitsLong represents an array with 1 entrys on positions where we are long the portfolio spread
+  numUnitsLong[longsEntry] = 1;
+  numUnitsLong[longsExit] = 0
+  numUnitsLong <- fillMissingValues(numUnitsLong)
+  
+  # numUnitsShort represents an array with -1 entrys on positions where we are short the portfolio spread
+  numUnitsShort[shortsEntry] <- -1
+  numUnitsShort[shortsExit] <- 0
+  numUnitsShort <- fillMissingValues(numUnitsShort)
+  
+  # numUnits represents an array that indicates how many units of the portfolio spread we bought (1), or sold (-1)
+  numUnits <- numUnitsLong+numUnitsShort
+  # numUnitsPortfolio epresents a matrix with the number of units of the portfolio that we buy or sell, for every timestamp
+  numUnitsPortfolio <- repmat(matrix(numUnits),1,length(p$portfolio))
+  # hedgeRatioMatrix represents a matrix with the hedgeRatio of each individual currencyPair, for every timestamp 
+  # This can also be viewed as the "shares allocation" for each currency Pair at any given point in time (the hedge ratio is fixed and always the same)
+  hedgeRatioMatrix <- repmat(matrix(getOptimalEigenvector,nrow=1),length(numUnits),1)
+  # prices matrix represents a matrix with the prices of the CurrencyPairs in the Portfolio, for every timestamp
+  pricesMatrix <- data.matrix(prices)
+  # hedgeRatioMatrix * pricesMatrix represents the USD capital allocation to buy the portfolio
+  # positions represents our USD capital in each currencyPair at any given point in time
+  positions <- numUnitsPortfolio*hedgeRatioMatrix*pricesMatrix
+  # takePosition contains a 1 value at timestamps where we open a position (and incur transaction costs)
+  takePosition = vector(mode="numeric",length=nrDataPoints)
+  for(i in 2:length(numUnits))
+  {
+    if(abs(numUnits[i])==1 & numUnits[i-1]==0)
+      takePosition[i]=1
+  }
+  # Pnl of the strategy on each timeStamp
+  pnl <- lag.matrix(positions)*(pricesMatrix-lag.matrix(pricesMatrix))/lag.matrix(pricesMatrix)
+  pnl[which(is.na(pnl))] <- 0 # First entry is NA. Set to 0.
+  pnl <- rowSums(pnl)
+  absTransactionCosts <- 0.995
+  pnl <- pnl * absTransactionCosts
+  # Return is P&L divided by gross market value of the portfolio
+  laggedPositions <- lag.matrix(positions)
+  laggedPositions[which(is.na(laggedPositions))] <- 0
+  ret <- pnl/rowSums(abs(laggedPositions))
+  ret[which(is.na(ret))] <- 0
+  
+  # Calculate and plot the results
+  APR <- round((prod(1+ret)^(252/length(ret))-1)*100,digits=4)
+  sharpeRatio <- round(sqrt(252)*mean(ret)/sd(ret),digits=4)
+  results <- (cumprod(1+ret)-1)*100
+  maxDD <- round(maxDrawdown(ret)*100,digits=4)
+  jpeg(paste0("analyse/img/", resHist))
+  dailyReturnsString <- paste('Daily Returns (average: ',round(mean(ret*100),digits=4), '%, std: ', round(sd(ret*100),digits=4), '%)',sep="")
+  plot(timeStamps,ret*100,xlab="Time",ylab="Returns (%)", main=dailyReturnsString, type='h')
+  dev.off()
+  jpeg(paste0("analyse/img/", resEq))
+  resultString <- paste('(APR: ',APR,'%, SR: ',sharpeRatio,', MAX DD: ',maxDD,'%)',sep="")
+  plot(timeStamps,results,xlab="Time",ylab="Return (%)",main=resultString, type='l')
+  dev.off()
 }
-#
+
 
 
 
