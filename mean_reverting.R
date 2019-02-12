@@ -53,6 +53,7 @@ sep = "/"
 from = "2008-01"
 to = "2014-06"
 max_port = 4
+leverage <- 10000
 c_entryZscore = 1 # Entry deviation
 c_exitZscore = 0 # Exit deviation
 portfolio <- list()
@@ -255,6 +256,7 @@ for(p in cointegratedPortfolio) {
     if(abs(numUnits[i])==1 & numUnits[i-1]==0)
       takePosition[i]=1
   }
+  
   # Pnl of the strategy on each timeStamp
   pnl <- lag.matrix(positions)*(pricesMatrix-lag.matrix(pricesMatrix))/lag.matrix(pricesMatrix)
   pnl[which(is.na(pnl))] <- 0 # First entry is NA. Set to 0.
@@ -280,6 +282,14 @@ for(p in cointegratedPortfolio) {
   resultString <- paste('(APR: ',APR,'%, SR: ',sharpeRatio,', MAX DD: ',maxDD,'%)',sep="")
   plot(timeStamps,results,xlab="Time",ylab="Return (%)",main=resultString, type='l')
   dev.off()
+  
+  # asb return cashflows
+  abs_ret <- leverage*pricesMatrix-leverage*lag.matrix(pricesMatrix)
+  abs_ret[which(is.na(abs_ret))] <- 0 # First entry is NA. Set to 0.
+  sum_abs_ret <- as.matrix(abs_ret) %*% as.vector(getOptimalEigenvector)
+  sum_abs_ret <- numUnits * sum_abs_ret
+  write(paste('<br/>On ',leverage, ' leverage absulte return is $', round(sum(sum_abs_ret))), 
+        filename, append = TRUE)
 }
 
 
