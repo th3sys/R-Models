@@ -39,19 +39,31 @@ vect_lag <- function(v, n=1, forward=FALSE) {
 }
 getPrices = function(theObject) {
   prices <- data.frame(theObject[[1]])
+  prices['Date'] <- time(theObject[[1]])
   # colnames(prices) <- colnames(toTest[[1]])
   for(i in 2:length(theObject)) {
     nxt <- data.frame(theObject[[i]])
+    nxt['Date'] <- time(theObject[[i]])
     # colnames(nxt) <- colnames(toTest[[i]])
-    prices <- cbind(prices,nxt)
+    prices <- merge(prices,nxt,by='Date')
+    #prices <- cbind(prices,nxt)
   }
+  selected = list()
+  for(x in colnames(prices)){
+    if(!grepl("_Volume",x)) {
+      selected[[x]] <- x
+    }
+  }
+  #  prices <- prices %>% 
+  #    filter_all(all_vars(abs(.) > 0))
+  prices <- dplyr::select(prices, as.character(selected))
   return (prices)
 }
 # 1. load
 data = "fx"
 sep = "/"
-from = "2008-01"
-to = "2014-06"
+from = "2008-01-01"
+to = "2014-06-01"
 max_port = 4
 leverage <- 10000
 c_entryZscore = 1 # Entry deviation
@@ -60,6 +72,7 @@ portfolio <- list()
 for (ccy in  list.files("fx")) {
   print (paste("loading ", ccy))
   dat = read.csv(paste(data,ccy, sep=sep), header=T) 
+  dat<- dat[dat$Volume>0,]
   date = as.Date(dat[,1], format = "%Y.%m.%d %H:%M:%S") 
   ccy <- gsub(".csv", "", ccy)
   if(startsWith(ccy, "USD")) {
@@ -86,15 +99,14 @@ for(i in seq(2,max_port)) {
       toTest[[z]] = portfolio[[combinations[j,z]]]
     }
     prices <- getPrices(toTest)
-    selected = list()
-    for(x in colnames(prices)){
-      if(!grepl("_Volume",x)) {
-        selected[[x]] <- x
+    keep <- list() 
+    nam <- colnames(prices)
+    for(i in nam) {
+      if (i != 'Date') {
+        keep[[i]] <- i
       }
     }
-    prices <- prices %>% 
-      filter_all(all_vars(abs(.) > 0))
-    prices <- dplyr::select(prices, as.character(selected))
+    prices<- prices[ , as.character(keep), drop = TRUE]
     varest <- VAR(prices,p=1,type="const",lag.max=24, ic="SC")
     # in the Johansen procedure for cointegration a lagged VAR (VECM) is used. Hence we need to subtract 1 from the optimal VAR lag length.
     lagLength <- max(2,varest$p-1)
@@ -138,14 +150,16 @@ for(p in cointegratedPortfolio) {
   p_length <- length(p$portfolio)
   getOptimalEigenvector <-p$trace@V[1:p_length,pos_lambda]
   prices <- getPrices(p$portfolio)
-  timeStamps <- time(p$portfolio[[1]])
-  selected = list()
-  for(x in colnames(prices)){
-    if(!grepl("_Volume",x)) {
-      selected[[x]] <- x
+  timeStamps<-prices[,'Date']
+  keep <- list() 
+  nam <- colnames(prices)
+  for(i in nam) {
+    if (i != 'Date') {
+      keep[[i]] <- i
     }
   }
-  prices <- dplyr::select(prices, as.character(selected))
+  prices<- prices[ , as.character(keep), drop = TRUE]
+  
   portfolioSpread <- rowSums(t(getOptimalEigenvector*t(prices)))
   # This function calculates the halflife of mean reversion and returns the result
   # dy(t) = (lambda*y(t-1) + mu)dt + dE
@@ -160,6 +174,7 @@ for(p in cointegratedPortfolio) {
   halfLife <- -log(2)/fit$coefficients[2]
   halfLifeString <- paste(" (HalfLife is ",ceiling(halfLife),' days)',sep="")
   currencyString <- colnames(prices)[1]
+  
   spreadString <- paste(getOptimalEigenvector[1], "*", colnames(prices)[1],sep="")
   for(j in 2:p_length)
   {    
@@ -170,6 +185,7 @@ for(p in cointegratedPortfolio) {
     spreadString <- paste(spreadString,sign,round(abs(getOptimalEigenvector[j]),2),"*",
                           colnames(prices)[j],sep="")
   }
+  print(currencyString)
   filename <- paste0("analyse/", currencyString,".html")
   autoCovar <- paste0(currencyString,"_acf.jpg")
   resSpread <- paste0(currencyString,"_test.jpg")
@@ -183,8 +199,8 @@ for(p in cointegratedPortfolio) {
   }
   write("<pre>", filename, append = TRUE)
   write(johansen@test.name, filename, append = TRUE)
-  write.table(cbind(round(johansen@teststat,2), johansen@cval), filename, append = TRUE)
-  write.table(round(johansen@V,2), filename, append = TRUE)
+  write.table(cbind(round(johansen@teststat,2), johansen@cval), filename, row.names = FALSE, col.names = FALSE, append = TRUE)
+  write.table(round(johansen@V,2), filename, row.names = FALSE, col.names = FALSE,  append = TRUE)
   write("</pre><pre>", filename, append = TRUE)
   write(c(dickey_fuller$method,"p-value", dickey_fuller$p.value), filename, append = TRUE)
   write("</pre>", filename, append = TRUE)
@@ -270,10 +286,11 @@ for(p in cointegratedPortfolio) {
   ret[which(is.na(ret))] <- 0
   
   # Calculate and plot the results
+  thedate = as.Date(timeStamps, format = "%Y.%m.%d %H:%M:%S") 
   APR <- round((prod(1+ret)^(252/length(ret))-1)*100,digits=4)
   sharpeRatio <- round(sqrt(252)*mean(ret)/sd(ret),digits=4)
   results <- (cumprod(1+ret)-1)*100
-  maxDD <- round(maxDrawdown(ret)*100,digits=4)
+  maxDD <- round(maxDrawdown(as.xts(ret,thedate))*100,digits=4)
   jpeg(paste0("analyse/img/", resHist))
   dailyReturnsString <- paste('Daily Returns (average: ',round(mean(ret*100),digits=4), '%, std: ', round(sd(ret*100),digits=4), '%)',sep="")
   plot(timeStamps,ret*100,xlab="Time",ylab="Returns (%)", main=dailyReturnsString, type='h')
