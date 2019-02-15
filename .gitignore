@@ -36,3 +36,5 @@ vignettes/*.pdf
 rsconnect/
 *.RData
 python/.idea
+analyse
+analyse copy

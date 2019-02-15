@@ -60,11 +60,11 @@ getPrices = function(theObject) {
   return (prices)
 }
 # 1. load
-data = "fx"
-# data = "IG/csv"
+# data = "fx"
+data = "IG/csv"
 sep = "/"
 from = "2008-01-01"
-to = "2014-06-01"
+to = "2019-01-01"
 max_port = 4
 leverage <- 10000
 c_entryZscore = 1 # Entry deviation
