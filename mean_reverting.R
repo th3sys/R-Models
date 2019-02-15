@@ -61,6 +61,7 @@ getPrices = function(theObject) {
 }
 # 1. load
 data = "fx"
+# data = "IG/csv"
 sep = "/"
 from = "2008-01-01"
 to = "2014-06-01"
@@ -69,7 +70,7 @@ leverage <- 10000
 c_entryZscore = 1 # Entry deviation
 c_exitZscore = 0 # Exit deviation
 portfolio <- list()
-for (ccy in  list.files("fx")) {
+for (ccy in  list.files(data)) {
   print (paste("loading ", ccy))
   dat = read.csv(paste(data,ccy, sep=sep), header=T) 
   dat<- dat[dat$Volume>0,]
@@ -194,9 +195,9 @@ for(p in cointegratedPortfolio) {
   resEq <- paste0(currencyString,"_eq.jpg")
   johansen <- summary(p$trace)
   dickey_fuller <- adf.test(portfolioSpread)
-  if (dickey_fuller$p.value > 0.02) {
-    next()
-  }
+  #if (dickey_fuller$p.value > 0.02) {
+  #  next()
+  #}
   write("<pre>", filename, append = TRUE)
   write(johansen@test.name, filename, append = TRUE)
   write.table(cbind(round(johansen@teststat,2), johansen@cval), filename, row.names = FALSE, col.names = FALSE, append = TRUE)
