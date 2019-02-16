@@ -37,13 +37,17 @@ vect_lag <- function(v, n=1, forward=FALSE) {
   else
     c(rep(NA, n), v[1:(length(v) - n)])
 }
-getPrices = function(theObject) {
-  prices <- data.frame(theObject[[1]])
-  prices['Date'] <- time(theObject[[1]])
+getPrices = function(theObject,f,t) {
+  local_pair<-theObject[[1]]
+  local_pair <- local_pair[paste(f,t,sep=sep)]
+  prices <- data.frame(local_pair)
+  prices['Date'] <- time(local_pair)
   # colnames(prices) <- colnames(toTest[[1]])
   for(i in 2:length(theObject)) {
-    nxt <- data.frame(theObject[[i]])
-    nxt['Date'] <- time(theObject[[i]])
+    nxt_pair<-theObject[[i]]
+    nxt_pair <- nxt_pair[paste(f,t,sep=sep)]
+    nxt <- data.frame(nxt_pair)
+    nxt['Date'] <- time(nxt_pair)
     # colnames(nxt) <- colnames(toTest[[i]])
     prices <- merge(prices,nxt,by='Date')
     #prices <- cbind(prices,nxt)
@@ -65,6 +69,10 @@ data = "IG/csv"
 sep = "/"
 from = "2008-01-01"
 to = "2019-01-01"
+in_from = "2008-01-01"
+in_to = "2014-06-01"
+out_from = "2014-06-01"
+out_to = "2019-01-01"
 max_port = 4
 leverage <- 10000
 c_entryZscore = 1 # Entry deviation
@@ -99,7 +107,7 @@ for(i in seq(2,max_port)) {
       # Add the currency pairs that correspond to this particular combination to the list
       toTest[[z]] = portfolio[[combinations[j,z]]]
     }
-    prices <- getPrices(toTest)
+    prices <- getPrices(toTest,in_from,in_to)
     keep <- list() 
     nam <- colnames(prices)
     for(i in nam) {
@@ -150,41 +158,53 @@ for(p in cointegratedPortfolio) {
   pos_lambda <- which.max(p$trace@lambda)
   p_length <- length(p$portfolio)
   getOptimalEigenvector <-p$trace@V[1:p_length,pos_lambda]
-  prices <- getPrices(p$portfolio)
-  timeStamps<-prices[,'Date']
+  # IN SAMPLE
+  in_prices <- getPrices(p$portfolio, in_from, in_to)
+  in_timeStamps<-in_prices[,'Date']
   keep <- list() 
-  nam <- colnames(prices)
+  nam <- colnames(in_prices)
   for(i in nam) {
     if (i != 'Date') {
       keep[[i]] <- i
     }
   }
-  prices<- prices[ , as.character(keep), drop = TRUE]
-  
-  portfolioSpread <- rowSums(t(getOptimalEigenvector*t(prices)))
+  in_prices<- in_prices[ , as.character(keep), drop = TRUE]
+  in_portfolioSpread <- rowSums(t(getOptimalEigenvector*t(in_prices)))
+  # OUT SAMPLE
+  out_prices <- getPrices(p$portfolio, out_from, out_to)
+  out_timeStamps<-out_prices[,'Date']
+  keep <- list() 
+  nam <- colnames(out_prices)
+  for(i in nam) {
+    if (i != 'Date') {
+      keep[[i]] <- i
+    }
+  }
+  out_prices<- out_prices[ , as.character(keep), drop = TRUE]
+  out_portfolioSpread <- rowSums(t(getOptimalEigenvector*t(out_prices)))
   # This function calculates the halflife of mean reversion and returns the result
   # dy(t) = (lambda*y(t-1) + mu)dt + dE
   # Halflife = -log(2)/lambda
   # Note: the function assumes that the johansen procedure was executed on the Portfolio
-  laggedPortfolioSpread = vect_lag(portfolioSpread,1)
-  deltaSpread = portfolioSpread-laggedPortfolioSpread
+  laggedPortfolioSpread = vect_lag(in_portfolioSpread,1)
+  deltaSpread = in_portfolioSpread-laggedPortfolioSpread
   laggedPortfolioSpread <- laggedPortfolioSpread[!is.na(laggedPortfolioSpread)]
   deltaSpread <- deltaSpread[!is.na(deltaSpread)]
   
   fit <- lm(deltaSpread ~ laggedPortfolioSpread)
   halfLife <- -log(2)/fit$coefficients[2]
   halfLifeString <- paste(" (HalfLife is ",ceiling(halfLife),' days)',sep="")
-  currencyString <- colnames(prices)[1]
+  currencyString <- colnames(in_prices)[1]
   
-  spreadString <- paste(getOptimalEigenvector[1], "*", colnames(prices)[1],sep="")
+  spreadString <- paste(getOptimalEigenvector[1], "*", colnames(in_prices)[1],sep="")
   for(j in 2:p_length)
   {    
-    currencyString <- paste(currencyString,colnames(prices)[j],sep="_")
+    currencyString <- paste(currencyString,colnames(in_prices)[j],sep="_")
     sign = "-"
     if(getOptimalEigenvector[j] > 0)
       sign = "+"
     spreadString <- paste(spreadString,sign,round(abs(getOptimalEigenvector[j]),2),"*",
-                          colnames(prices)[j],sep="")
+                          colnames(in_prices)[j],sep="")
   }
   print(currencyString)
   filename <- paste0("analyse/", currencyString,".html")
@@ -194,7 +214,7 @@ for(p in cointegratedPortfolio) {
   resHist <- paste0(currencyString,"_hist.jpg")
   resEq <- paste0(currencyString,"_eq.jpg")
   johansen <- summary(p$trace)
-  dickey_fuller <- adf.test(portfolioSpread)
+  dickey_fuller <- adf.test(in_portfolioSpread)
   #if (dickey_fuller$p.value > 0.02) {
   #  next()
   #}
@@ -211,33 +231,33 @@ for(p in cointegratedPortfolio) {
   write(paste0("<img src='img/",resHist,"'/>"), filename, append = TRUE)
   write(paste0("<img src='img/",resEq,"'/>"), filename, append = TRUE)
   jpeg(paste0("analyse/img/", autoCovar))
-  acf(portfolioSpread)
+  acf(in_portfolioSpread)
   dev.off( )
   jpeg(paste0("analyse/img/", resSpread))
-  s <- portfolioSpread
-  plot(timeStamps,s,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
+  s <- in_portfolioSpread
+  plot(out_timeStamps,out_portfolioSpread,xlab=paste("Time",halfLifeString),ylab="Spread",main=spreadString,type="l")
   abline(h=c(mean(s),mean(s)+sd(s),a=mean(s)+2*sd(s),
              mean(s)-sd(s),mean(s)-2*sd(s)),col=c("green","blue","red","blue","red"))
   dev.off( )
   jpeg(paste0("analyse/img/", resMult))
-  plot(timeStamps, prices[,1], ylim=c(0.5,1.5)*range(prices), main="",type="l",ylab="",xlab="")
-  for(i in 2:length(prices)) {
-    lines(timeStamps, prices[,i], col=i)
+  plot(out_timeStamps, out_prices[,1], ylim=c(0.5,1.5)*range(out_prices), main="",type="l",ylab="",xlab="")
+  for(i in 2:length(out_prices)) {
+    lines(out_timeStamps, out_prices[,i], col=i)
   }
-  legend("topleft", legend = colnames(prices), 
-         text.col=c(1:length(prices)), ncol=length(prices) )
+  legend("topleft", legend = colnames(out_prices), 
+         text.col=c(1:length(out_prices)), ncol=length(out_prices) )
   dev.off( )
   
+  meanSpread <- mean(in_portfolioSpread)
+  stdSpread <- sd(in_portfolioSpread)
   # 5 execute strategy
-  meanSpread <- mean(portfolioSpread)
-  stdSpread <- sd(portfolioSpread)
-  zScore = (portfolioSpread - meanSpread)/stdSpread
+  zScore = (out_portfolioSpread - meanSpread)/stdSpread
   longsEntry <- (zScore < -c_entryZscore)
   longsExit <- (zScore > -c_exitZscore)
   shortsEntry <- (zScore > c_entryZscore)
   shortsExit <- (zScore < c_exitZscore)
   
-  nrDataPoints <- length(portfolioSpread)
+  nrDataPoints <- length(out_portfolioSpread)
   # Create vector with 0 values
   numUnitsLong <- vector(mode="numeric",length=nrDataPoints)
   # Set NA from 2:end
@@ -262,7 +282,7 @@ for(p in cointegratedPortfolio) {
   # This can also be viewed as the "shares allocation" for each currency Pair at any given point in time (the hedge ratio is fixed and always the same)
   hedgeRatioMatrix <- repmat(matrix(getOptimalEigenvector,nrow=1),length(numUnits),1)
   # prices matrix represents a matrix with the prices of the CurrencyPairs in the Portfolio, for every timestamp
-  pricesMatrix <- data.matrix(prices)
+  pricesMatrix <- data.matrix(out_prices)
   # hedgeRatioMatrix * pricesMatrix represents the USD capital allocation to buy the portfolio
   # positions represents our USD capital in each currencyPair at any given point in time
   positions <- numUnitsPortfolio*hedgeRatioMatrix*pricesMatrix
@@ -287,18 +307,18 @@ for(p in cointegratedPortfolio) {
   ret[which(is.na(ret))] <- 0
   
   # Calculate and plot the results
-  thedate = as.Date(timeStamps, format = "%Y.%m.%d %H:%M:%S") 
+  thedate = as.Date(out_timeStamps, format = "%Y.%m.%d %H:%M:%S") 
   APR <- round((prod(1+ret)^(252/length(ret))-1)*100,digits=4)
   sharpeRatio <- round(sqrt(252)*mean(ret)/sd(ret),digits=4)
   results <- (cumprod(1+ret)-1)*100
   maxDD <- round(maxDrawdown(as.xts(ret,thedate))*100,digits=4)
   jpeg(paste0("analyse/img/", resHist))
   dailyReturnsString <- paste('Daily Returns (average: ',round(mean(ret*100),digits=4), '%, std: ', round(sd(ret*100),digits=4), '%)',sep="")
-  plot(timeStamps,ret*100,xlab="Time",ylab="Returns (%)", main=dailyReturnsString, type='h')
+  plot(out_timeStamps,ret*100,xlab="Time",ylab="Returns (%)", main=dailyReturnsString, type='h')
   dev.off()
   jpeg(paste0("analyse/img/", resEq))
   resultString <- paste('(APR: ',APR,'%, SR: ',sharpeRatio,', MAX DD: ',maxDD,'%)',sep="")
-  plot(timeStamps,results,xlab="Time",ylab="Return (%)",main=resultString, type='l')
+  plot(out_timeStamps,results,xlab="Time",ylab="Return (%)",main=resultString, type='l')
   dev.off()
   
   # asb return cashflows
